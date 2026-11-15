@@ -4573,8 +4573,14 @@
   }
 
   // ---- Config & Gateway Mode ----
+  const isServerHosted = window.location.protocol.startsWith('http');
   const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  let gatewayChoice = localStorage.getItem('sr_gateway_choice') || (isLocalHost ? 'local' : 'gas');
+  // On any web server (localhost, Render, or cloud host), default to 'local' (the Backend Server)
+  let gatewayChoice = localStorage.getItem('sr_gateway_choice');
+  if (!gatewayChoice || (isServerHosted && gatewayChoice === 'gas' && !localStorage.getItem('sr_manual_gateway_override'))) {
+    gatewayChoice = isServerHosted ? 'local' : 'gas';
+    localStorage.setItem('sr_gateway_choice', gatewayChoice);
+  }
 
   const inputBaseUrl = document.getElementById('baseUrl');
   const labelGateway = document.getElementById('active-gateway-label');
@@ -4612,9 +4618,9 @@
         btnGatewayGas.style.borderColor = 'var(--line)';
         btnGatewayGas.style.background = 'var(--panel-2)';
       }
-      if (labelGateway) labelGateway.textContent = 'Using Local Server (Port 5000)';
+      if (labelGateway) labelGateway.textContent = `Using Backend Server (${isLocalHost ? 'Port 5000' : window.location.host})`;
       if (statusDot) statusDot.style.background = 'var(--accent)';
-      if (statusText) statusText.innerHTML = '<span class="dot" id="status-pill-dot" style="background:var(--accent)"></span> Local Server';
+      if (statusText) statusText.innerHTML = '<span class="dot" id="status-pill-dot" style="background:var(--accent)"></span> Server Online';
     } else {
       if (btnGatewayGas) {
         btnGatewayGas.classList.add('active');
@@ -4681,8 +4687,18 @@
     const cleanPath = path.split('?')[0].replace(/^\//, '');
     const extraQuery = path.includes('?') ? path.substring(path.indexOf('?') + 1) : '';
 
-    // If configured for Local Server (default on localhost):
-    if (gatewayChoice === 'local') {
+    // Endpoints that MUST run on the Express Backend (Vector Matching, Embeddings, Excel, AI)
+    const requiresServer = cleanPath.startsWith('api/') || 
+                           cleanPath === 'find-suitable-candidates' || 
+                           cleanPath === 'find-resume' || 
+                           cleanPath === 'groq-evaluate' ||
+                           cleanPath === 'admin-assign-hr' ||
+                           cleanPath === 'sales-add-requirement' ||
+                           cleanPath === 'marketing-add-requirement' ||
+                           cleanPath === 'update-candidate-decision';
+
+    // If configured for Server (default on localhost & Render) or endpoint requires server:
+    if (gatewayChoice === 'local' || isServerHosted || requiresServer) {
       try {
         const localUrl = path.startsWith('/') ? path : '/' + path;
         const localOpts = { ...options };
@@ -4694,11 +4710,16 @@
           const statusDot = document.getElementById('status-pill-dot');
           const statusText = document.getElementById('status-pill-indicator');
           if (statusDot) statusDot.style.background = 'var(--accent)';
-          if (statusText) statusText.innerHTML = '<span class="dot" id="status-pill-dot" style="background:var(--accent)"></span> Local Server';
+          if (statusText) statusText.innerHTML = '<span class="dot" id="status-pill-dot" style="background:var(--accent)"></span> Server Online';
+          return res;
+        } else if (requiresServer) {
           return res;
         }
       } catch (localErr) {
-        console.warn('Local server request error, attempting fallback:', localErr);
+        console.warn('Backend server request error:', localErr);
+        if (requiresServer) {
+          throw new Error('Backend server is unreachable. Please verify Render service is running.');
+        }
       }
     }
 

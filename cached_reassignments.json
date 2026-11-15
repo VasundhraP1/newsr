@@ -113,10 +113,10 @@
     "notes": "Please source 2-3 ServiceNow ITSM profiles.",
     "current_candidates_count": 0,
     "candidates_added_while_reassigned": 0,
-    "requirement_status": "Open – Unassigned",
-    "current_assignee": "",
-    "priority": "High",
-    "client_name": "Happiest Minds",
-    "date": "2026-10-30"
+    "requirement_status": "Open – Assigned",
+    "current_assignee": "Afsheen",
+    "priority": "Very High",
+    "client_name": "Softechera",
+    "date": "2026-11-12"
   }
 ]
