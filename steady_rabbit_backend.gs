@@ -154,12 +154,12 @@ function getRequirementsSheet(ss, tabName) {
     if (explicit) return explicit;
   }
 
-  // 1. Try 'Requirement Sheet' specifically (matches sales tab gid=0)
-  let sheet = getSheetByNameCaseInsensitive(ss, 'Requirement Sheet');
+  // 1. Try 'Requirement sheet new' specifically (prioritize newer active sales tab gid=1178673555)
+  let sheet = getSheetByNameCaseInsensitive(ss, 'Requirement sheet new');
   if (sheet) return sheet;
 
-  // 2. Try 'Requirement sheet new' specifically (prioritize newer sales tab)
-  sheet = getSheetByNameCaseInsensitive(ss, 'Requirement sheet new');
+  // 2. Try 'Requirement Sheet' specifically (matches sales tab gid=0)
+  sheet = getSheetByNameCaseInsensitive(ss, 'Requirement Sheet');
   if (sheet) return sheet;
   
   // 3. Try 'Final' (NMo Sheet tab name)
@@ -433,22 +433,20 @@ function handleListRequirements(bypassCache, sheetId, tabName) {
     Logger.log("Could not open active requirements sheet B: " + e.toString());
   }
 
-  // Combine and deduplicate
+  // Return all valid requirement rows from sheet A without dropping separate position openings
   const requirements = [];
-  const reqKeys = new Set();
-  
-  const addToList = (list) => {
-    list.forEach(r => {
-      const key = `${r.date}_${r.requirement}_${r.assignee}`.toLowerCase();
-      if (!reqKeys.has(key)) {
-        reqKeys.add(key);
+  requirementsA.forEach(r => requirements.push(r));
+
+  // If a secondary distinct sheet is present, append only unique items from B
+  if (requirementsB.length > 0) {
+    const existingKeys = new Set(requirementsA.map(r => `${r.date}_${r.requirement}_${r.client_name}_${r.assignee}_${r.candidate_name}`.toLowerCase()));
+    requirementsB.forEach(r => {
+      const k = `${r.date}_${r.requirement}_${r.client_name}_${r.assignee}_${r.candidate_name}`.toLowerCase();
+      if (!existingKeys.has(k)) {
         requirements.push(r);
       }
     });
-  };
-  
-  addToList(requirementsA);
-  addToList(requirementsB);
+  }
 
   // Sort requirements by date descending
   requirements.sort((a, b) => new Date(b.date) - new Date(a.date));

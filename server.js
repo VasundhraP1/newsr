@@ -265,6 +265,17 @@ const defaultUsersList = [
     allowedSubtabs: ['post_req', 'req_view', 'cand_view', 'send_toggle', 'send_action', 'send_sched_meet', 'status_toggle', 'status_action', 'report_view', 'interview_sched', 'interview_drive', 'interview_groq'],
     isPermanentAdmin: false,
     created_at: new Date().toISOString()
+  },
+  {
+    id: 'user_saran',
+    name: 'Saran',
+    email: 'saran@steady-rabbit.com',
+    role: 'Marketing',
+    isAdmin: false,
+    allowedTabs: ['marketing', 'list', 'candidates', 'send-interview', 'interview-status', 'interview-report', 'hr-interviews'],
+    allowedSubtabs: ['post_req', 'req_view', 'cand_view', 'send_toggle', 'send_action', 'send_sched_meet', 'status_toggle', 'status_action', 'report_view', 'interview_sched', 'interview_drive', 'interview_groq'],
+    isPermanentAdmin: false,
+    created_at: new Date().toISOString()
   }
 ];
 
@@ -619,12 +630,23 @@ function checkAndAutoReturnHolidays() {
 
 function ensureRequirementIdsAndStatuses() {
   let changed = false;
-  requirements.forEach((r, idx) => {
+  let maxId = 0;
+  requirements.forEach(r => {
+    const m = (r.req_id || '').match(/REQ-(\d+)/i);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > maxId) maxId = n;
+    }
+  });
+
+  requirements.forEach((r) => {
     if (!r.req_id) {
-      r.req_id = 'REQ-' + String(idx + 1).padStart(3, '0');
+      maxId++;
+      r.req_id = 'REQ-' + String(maxId).padStart(3, '0');
       changed = true;
     }
-    if (!r.status || r.status === '' || r.status === 'Inactive' || r.status === 'Pending Completion' || r.status === 'Active') {
+    // Only set default status if completely missing or empty
+    if (!r.status || r.status.trim() === '' || r.status === 'Pending Completion') {
       if (r.assignee && r.assignee.trim() !== '' && r.assignee !== '—' && r.assignee !== '-') {
         r.status = 'Open – Assigned';
       } else {
@@ -702,48 +724,81 @@ const DEFAULT_SHEET_ID = '1vUK6MvjrHeE1OdCY7Tt5x4XRty-rTBFc9RAFoYRvdtE';
 // Live background sync from Google Apps Script
 async function syncFromGoogleSheets(targetSheetId = DEFAULT_SHEET_ID) {
   try {
-    const resReq = await fetch(`${GAS_URL}?action=list-requirements&sheet_id=${targetSheetId}&bypass_cache=true`, { redirect: 'follow' });
+    const resReq = await fetch(`${GAS_URL}?action=list-requirements&sheet_id=${targetSheetId}&tab_name=Requirement%20sheet%20new&bypass_cache=true`, { redirect: 'follow' });
     if (resReq.ok) {
       const dataReq = await resReq.json();
       if (dataReq && dataReq.success && Array.isArray(dataReq.requirements) && dataReq.requirements.length > 0) {
-        // Merge with existing requirements to preserve local changes, statuses, assignees, and req_ids
-        const existingMap = new Map();
+        // Group existing requirements by signature to preserve local req_ids and checklist states
+        const existingBySig = new Map();
         requirements.forEach(r => {
-          if (r.req_id) existingMap.set(r.req_id, r);
-          if (r.requirement) existingMap.set(r.requirement.toLowerCase().trim(), r);
+          const sig = `${(r.requirement || '').toLowerCase()}___${(r.date || '').trim()}___${(r.client_name || '').toLowerCase()}___${(r.assignee || '').toLowerCase()}`;
+          if (!existingBySig.has(sig)) existingBySig.set(sig, []);
+          existingBySig.get(sig).push(r);
         });
 
-        const merged = [];
-        const seenKeys = new Set();
+        // Track max requirement ID number
+        let maxReqNum = 0;
+        requirements.forEach(r => {
+          const m = (r.req_id || '').match(/REQ-(\d+)/i);
+          if (m) {
+            const n = parseInt(m[1], 10);
+            if (n > maxReqNum) maxReqNum = n;
+          }
+        });
 
+        // Keep all local additions that are not yet in the sheet
+        const locallyAdded = requirements.filter(r => r.is_local_addition && !r.synced_to_sheet);
+
+        const merged = [];
         dataReq.requirements.forEach(remoteReq => {
           const reqName = (remoteReq.requirement || '').trim();
           if (!reqName) return;
 
-          const key = `${reqName.toLowerCase()}___${remoteReq.date || ''}___${remoteReq.client_name || ''}`;
-          if (seenKeys.has(key)) return;
-          seenKeys.add(key);
-
-          const existing = existingMap.get(reqName.toLowerCase());
-          if (!existing) {
-            const hasAssignee = remoteReq.assignee && remoteReq.assignee.trim() !== '' && remoteReq.assignee !== '—' && remoteReq.assignee !== '-';
-            if (!remoteReq.status || remoteReq.status === '' || remoteReq.status === 'Inactive' || remoteReq.status === 'Active') {
-              remoteReq.status = hasAssignee ? 'Open – Assigned' : 'Open – Unassigned';
-            }
-            merged.push(remoteReq);
+          // Preserve exact status from Google Sheet (Active, Inactive, etc.)
+          const rawStatus = (remoteReq.status || '').trim();
+          if (rawStatus) {
+            remoteReq.status = rawStatus;
           } else {
-            // keep existing status and assignee if updated locally
-            if (!remoteReq.status || remoteReq.status === 'Inactive') {
-              remoteReq.status = existing.status;
-            }
-            if (!remoteReq.assignee && existing.assignee) {
-              remoteReq.assignee = existing.assignee;
-            }
-            if (!remoteReq.req_id && existing.req_id) {
-              remoteReq.req_id = existing.req_id;
-            }
-            Object.assign(existing, remoteReq);
-            merged.push(existing);
+            const hasAssignee = remoteReq.assignee && remoteReq.assignee.trim() !== '' && remoteReq.assignee !== '—' && remoteReq.assignee !== '-';
+            remoteReq.status = hasAssignee ? 'Open – Assigned' : 'Open – Unassigned';
+          }
+
+          // Match with existing requirement if available
+          const sig = `${reqName.toLowerCase()}___${(remoteReq.date || '').trim()}___${(remoteReq.client_name || '').toLowerCase()}___${(remoteReq.assignee || '').toLowerCase()}`;
+          const existingList = existingBySig.get(sig);
+          let existing = null;
+          if (existingList && existingList.length > 0) {
+            existing = existingList.shift();
+          }
+
+          if (existing) {
+            remoteReq.req_id = existing.req_id || remoteReq.req_id;
+            if (existing.checklist) remoteReq.checklist = existing.checklist;
+            if (existing.posted_naukri !== undefined) remoteReq.posted_naukri = existing.posted_naukri;
+            if (existing.posted_linkedin !== undefined) remoteReq.posted_linkedin = existing.posted_linkedin;
+            if (existing.shared_vendors !== undefined) remoteReq.shared_vendors = existing.shared_vendors;
+            if (existing.positions_count) remoteReq.positions_count = existing.positions_count;
+            if (existing.work_setting) remoteReq.work_setting = existing.work_setting;
+            if (existing.experience) remoteReq.experience = existing.experience;
+          } else {
+            maxReqNum++;
+            remoteReq.req_id = 'REQ-' + String(maxReqNum).padStart(3, '0');
+            remoteReq.positions_count = 1;
+            remoteReq.work_setting = (remoteReq.location && remoteReq.location.toLowerCase().includes('remote')) ? 'Remote' : 'Hybrid';
+            remoteReq.experience = '3-5 Years';
+            remoteReq.posted_naukri = false;
+            remoteReq.posted_linkedin = false;
+            remoteReq.shared_vendors = false;
+            remoteReq.checklist = { posted_naukri: false, posted_linkedin: false, shared_vendors: false };
+          }
+
+          merged.push(remoteReq);
+        });
+
+        // Prepend locally created requirements
+        locallyAdded.forEach(localReq => {
+          if (!merged.some(m => m.req_id === localReq.req_id)) {
+            merged.unshift(localReq);
           }
         });
 
@@ -898,7 +953,7 @@ app.post('/google-login', (req, res) => {
       isAdmin = !!matchedUser.isAdmin;
       allowedTabs = matchedUser.isAdmin ? [...ALL_TABS] : (matchedUser.allowedTabs || []);
       allowedSubtabs = matchedUser.isAdmin ? [...ALL_SUBTABS] : (matchedUser.allowedSubtabs || []);
-    } else if (email.startsWith('marketing') || name.toLowerCase().includes('marketing')) {
+    } else if (email === 'saran@steady-rabbit.com' || email.startsWith('marketing') || name.toLowerCase().includes('marketing') || name.toLowerCase().includes('saran')) {
       role = 'Marketing';
       isAdmin = false;
       allowedTabs = ['marketing', 'list', 'candidates', 'send-interview', 'interview-status', 'interview-report', 'hr-interviews'];

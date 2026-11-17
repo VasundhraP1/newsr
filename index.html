@@ -4964,7 +4964,7 @@
           let role = 'HR';
           if (email === 'vasundhra@steadyrabbit.in' || email === 'vasundhara@steadyrabbit.in' || name.toLowerCase().indexOf('vasundh') !== -1) {
             role = 'Both';
-          } else if (email.indexOf('marketing') === 0 || name.toLowerCase().indexOf('marketing') !== -1) {
+          } else if (email === 'saran@steady-rabbit.com' || email.indexOf('marketing') === 0 || name.toLowerCase().indexOf('marketing') !== -1 || name.toLowerCase().indexOf('saran') !== -1) {
             role = 'Marketing';
           }
           
@@ -5124,7 +5124,7 @@
       let role = 'Both';
       if (name.toLowerCase() === 'afsheen' || name.toLowerCase() === 'diksha' || name.toLowerCase() === 'likitha' || name.toLowerCase() === 'richa' || name.toLowerCase() === 'kavipriya' || name.toLowerCase() === 'ayushi' || name.toLowerCase() === 'prachi' || name.toLowerCase() === 'naagu') {
         role = 'HR';
-      } else if (name.toLowerCase().includes('marketing')) {
+      } else if (email === 'saran@steady-rabbit.com' || name.toLowerCase().includes('marketing') || name.toLowerCase().includes('saran')) {
         role = 'Marketing';
       }
       result = {
@@ -6798,17 +6798,17 @@
       const isUnfilled = !r.assignee || r.assignee.trim() === '' || r.assignee === '—' || r.status === 'Open – Unassigned' || r.status === 'Pending Completion';
       const fulfillmentOk = hrFulfillmentFilter === 'all' || (hrFulfillmentFilter === 'unfilled' && isUnfilled);
 
-      // Role-based visibility: Admins see all; Sales sees their requirements; HR sees assigned
+      // Role-based visibility:
+      // In the "All Requirements" view, team members can view requirements unless filtered by assignee.
       const isAdmin = isUserAdmin(currentUser);
       let roleOk = true;
       if (!isAdmin && currentUser) {
         if (currentUser.role === 'Marketing') {
-          const owner = (r.requirement_owner || r.created_by || '').toLowerCase();
-          const curName = (currentUser.name || '').toLowerCase();
-          const curEmail = (currentUser.email || '').toLowerCase();
-          roleOk = owner.includes(curName) || owner.includes(curEmail) || owner === 'sales' || !r.requirement_owner;
+          roleOk = true;
         } else if (currentUser.role === 'HR') {
-          roleOk = isUserAssignee(r.assignee, currentUser);
+          if (assignee === 'mine') {
+            roleOk = isUserAssignee(r.assignee, currentUser);
+          }
         }
       }
 
@@ -13264,8 +13264,8 @@ Steady Rabbit HR Team`;
     btnBypassSwitch.addEventListener('click', async (e) => {
       e.preventDefault();
       const testEmail = prompt(
-        'Enter email address to test login & permissions\n(e.g., diksha@steadyrabbit.in, marketing@steadyrabbit.in, or any added user):',
-        'diksha@steadyrabbit.in'
+        'Enter email address to test login & permissions\n(e.g., saran@steady-rabbit.com, diksha@steadyrabbit.in, marketing@steadyrabbit.in, or any added user):',
+        'saran@steady-rabbit.com'
       );
       if (!testEmail || !testEmail.trim()) return;
 

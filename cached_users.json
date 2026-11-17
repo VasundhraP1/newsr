@@ -147,5 +147,37 @@
     ],
     "isPermanentAdmin": false,
     "created_at": "2026-10-13T18:19:05.855Z"
+  },
+  {
+    "id": "user_saran",
+    "name": "Saran",
+    "email": "saran@steady-rabbit.com",
+    "role": "Marketing",
+    "isAdmin": false,
+    "allowedTabs": [
+      "marketing",
+      "list",
+      "candidates",
+      "send-interview",
+      "interview-status",
+      "interview-report",
+      "hr-interviews"
+    ],
+    "allowedSubtabs": [
+      "post_req",
+      "req_view",
+      "cand_view",
+      "send_toggle",
+      "send_action",
+      "send_sched_meet",
+      "status_toggle",
+      "status_action",
+      "report_view",
+      "interview_sched",
+      "interview_drive",
+      "interview_groq"
+    ],
+    "isPermanentAdmin": false,
+    "created_at": "2026-11-17T10:30:00.000Z"
   }
 ]
